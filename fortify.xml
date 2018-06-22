@@ -1,0 +1,150 @@
+<!--**************************************************************************************************************
+    USAGE READ ME
+
+    aether-ant-tasks jar (i.e. aether-ant-tasks.jar) must be located in target/antlib/aether-ant-tasks.jar.
+
+			Recommendation:
+  			You can install it using any maven project which inherits from ascent-libraries-parent. Just run
+				`mvn antrun:run@fortify-scan` and it will download the jar, and execute this ant build file.
+
+		Fortify SCA and apps must be downloaded/installed and the fortify-maven-plugin downloaded and configured.
+		Note that in the future this script will work more directly with the maven plugin, but we're not there as of
+		yet.
+
+***************************************************************************************************************-->
+
+<project name="fortify-build-utils" basedir="." default="fortify.all" xmlns:aether="antlib:org.eclipse.aether.ant">
+
+	<description>This Ant script contains all of the Fortify related targets, configuration, etc.</description>
+
+		<path id="aether-ant-tasks.classpath" path="target/antlib/aether-ant-tasks-uber.jar" />
+		<typedef uri="antlib:org.eclipse.aether.ant" resource="org/eclipse/aether/ant/antlib.xml" classpathref="aether-ant-tasks.classpath" />
+
+		<!-- Conditions to help determine OS. -->
+		<echo message="Determine OS!" />
+		<condition property="isWindows">
+				<os family="windows" />
+		</condition>
+		<condition property="isUnix">
+				<os family="unix" />
+		</condition>
+
+		<!-- Have the user set the settings file. -->
+    <property name="mvn.project.settings" value="${user.home}/.m2/settings.xml"/>
+		<echo message="settings.xml location is ${mvn.project.settings}"/>
+
+		<property name="mvn.pom.location" value="pom.xml" />
+		<echo message="pom location is ${mvn.pom.location}" />
+
+
+		<!-- get various project properties from pom -->
+
+		<echo message="Getting various project properties from pom." />
+		<aether:settings file="${mvn.project.settings}" />
+		<aether:pom id="pomFile" file="${mvn.pom.location}" />
+
+	  <property name="project.artifactId" value="${pomFile.artifactId}" />
+		<property name="project.version" value="${pomFile.version}" />
+
+
+
+
+<!--..............................................................................................................
+    FORTIFY SCRIPT CONFIG/SETUP
+    This is properties and config/setup for the fortify scripts
+...............................................................................................................-->
+    <!-- Directory where we store the fortify output -->
+    <property name="dir.out" value="./target/fortify" />
+
+    <!-- Overridable properties for fortify generation since these could change at some point -->
+    <property name="file.fortify.audits" value="./fortify-audits.fpr" />
+    <property name="file.fortify.audits.current.build" value="${dir.out}/${project.artifactId}-${project.version}.fpr" />
+
+
+    <!-- (commented out for now. trying to use sourceanalyzer) <property name="mvn.cmd.fortify.prereq" value="install -DskipTests" />
+    <property name="mvn.cmd.fortify.scan" value="initialize sca:scan" /> -->
+
+    <!-- Maven command with extra properties needed for running the maven command (Usually used in our build pipelines) -->
+    <property name="mvn.cmd.fortify.extra.properties" value="mvn -Dmaven.wagon.http.ssl.insecure=true -Dmaven.wagon.http.ssl.ignore.validity.dates=true -Dmaven.wagon.http.ssl.allowall=true -Ddockerfile.skip=true -DskipITs=true -s ${mvn.project.settings}" />
+
+    <!-- Values for the fortify maven plugin -->
+    <property name="mvn.plugin.fortify" value="com.hpe.security.fortify.maven.plugin:sca-maven-plugin" />
+    <property name="mvn.plugin.fortify.version" value="17.20" />
+
+    <!-- Commands for the sourceanalyzer -->
+    <property name="sourceanalyzer.fortify" value="sourceanalyzer -b ${project.artifactId}" />
+    <property name="sourceanalyzer.fortify.translate" value="${sourceanalyzer.fortify} touchless ${mvn.cmd.fortify.extra.properties} ${mvn.plugin.fortify}:${mvn.plugin.fortify.version}:translate" />
+    <property name="sourceanalyzer.fortify.scan" value="${sourceanalyzer.fortify} -scan -f ${file.fortify.audits.current.build} -format fpr"/>
+    <property name="sourceanalyzer.fortify.clean" value="${sourceanalyzer.fortify} -clean" />
+
+
+<!--..............................................................................................................
+    FORTIFY SCAN
+    Performs the actual fortify scan.
+...............................................................................................................-->
+	<target name="fortify.all" description="Runs all fortify commands, the entire process!"
+		depends="fortify.mvn.version, fortify.clean, fortify.scan, fortify.merge" />
+
+	<target name="fortify.mvn.version" description="Displays the maven version being used for debug.">
+		<echo message="The version of Maven being used..." />
+		<antcall target="run-exec-cmd"><param name="param.exec.cmd" value="mvn -version"/></antcall>
+    </target>
+
+	<target name="fortify.clean" description="Cleans the output fortify scan output directory.">
+        <echo message="Cleaning the output fortify scan output directory." />
+        <antcall target="run-exec-cmd"><param name="param.exec.cmd" value="${sourceanalyzer.fortify.clean}"/></antcall>
+    </target>
+
+    <target name="fortify.scan" description="Performs the fortify scan.">
+
+        <echo message="Running the fortify scan prep steps..." />
+        <antcall target="run-exec-cmd"><param name="param.exec.cmd" value="${sourceanalyzer.fortify.translate}"/></antcall>
+
+        <echo message="Running the fortify scan..." />
+        <antcall target="run-exec-cmd"><param name="param.exec.cmd" value="${sourceanalyzer.fortify.scan}"/></antcall>
+    </target>
+
+  <!-- Merge target depending on whether fpr.file.exists property is true, which is set by merge.file.available target-->
+	<target name="fortify.merge" description="Merges, as needed, fortify scans."
+	        if="fpr.file.exists"
+					depends="merge.file.available, output.file.exists">
+					<echo message="Found fortify audits file ${file.fortify.audits} for merging, proceeding to merge!" />
+					<antcall target="run-exec-cmd"><param name="param.exec.cmd"
+						 value="FPRUtility -merge -project ${file.fortify.audits.current.build} -source ${file.fortify.audits} -f ${file.fortify.audits.current.build} "/></antcall>
+	</target>
+
+	<target name="merge.file.available" description="Checks to see if ${file.fortify.audits} exists">
+			<available file="${file.fortify.audits}" property="fpr.file.exists"/>
+	</target>
+
+	<target name="output.file.exists">
+			<echo message="${file.fortify.audits} exists: ${fpr.file.exists}"/>
+	</target>
+
+<!--..............................................................................................................
+    EXECUTION TARGETS
+    Various targets to allow us to invoke Maven and other executables on windows, linux or mac.
+...............................................................................................................-->
+    <target name="exec_windows_setup" if="isWindows">
+        <echo message="Windows based exec command being leveraged." />
+        <property name="exec.executable" value="cmd" />
+        <property name="exec.args" value="/c" />
+    </target>
+
+    <target name="exec_unix_setup" if="isUnix">
+        <echo message="Unix based exec command being leveraged." />
+        <property name="exec.executable" value="sh" />
+        <property name="exec.args" value="-c" />
+    </target>
+
+    <target name="run-exec-cmd" depends="exec_windows_setup, exec_unix_setup">
+        <fail unless="exec.executable" message="Failed to find the executable for OS/env." />
+        <fail unless="exec.args" message="Failed to find the executable args for OS/env." />
+        <fail unless="param.exec.cmd" message="Must provide param.exec.cmd to run." />
+        <echo message="Executing Command ${exec.executable} ${exec.args} ${param.exec.cmd}" />
+        <exec dir="${basedir}" executable="${exec.executable}" failonerror="true">
+            <arg line="${exec.args} '${param.exec.cmd}'" />
+        </exec>
+    </target>
+
+</project>
