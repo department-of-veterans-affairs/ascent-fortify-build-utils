@@ -5,11 +5,11 @@
 
 			Recommendation:
   			You can install it using any maven project which inherits from ascent-libraries-parent. Just run
-				`mvn antrun:run@fortify-scan` and it will download the jar, and execute this ant build file.
+				`mvn antrun:run@fortify-scan -N` and it will download the jar, and execute this ant build file in the
+				root of the project.
 
-		Fortify SCA and apps must be downloaded/installed and the fortify-maven-plugin downloaded and configured.
-		Note that in the future this script will work more directly with the maven plugin, but we're not there as of
-		yet.
+		Fortify SCA and apps must be downloaded/installed and the FORTIFY_INSTALL_DIR/bin directory added to your
+		PATH variable
 
 ***************************************************************************************************************-->
 
@@ -73,9 +73,9 @@
 
     <!-- Commands for the sourceanalyzer -->
     <property name="sourceanalyzer.fortify" value="sourceanalyzer -b ${project.artifactId}" />
-    <property name="sourceanalyzer.fortify.translate" value="${sourceanalyzer.fortify} touchless ${mvn.cmd.fortify.extra.properties} ${mvn.plugin.fortify}:${mvn.plugin.fortify.version}:translate" />
-    <property name="sourceanalyzer.fortify.scan" value="${sourceanalyzer.fortify} -scan -f ${file.fortify.audits.current.build} -format fpr"/>
-    <property name="sourceanalyzer.fortify.clean" value="${sourceanalyzer.fortify} -clean" />
+    <property name="sourceanalyzer.fortify.translate" value="${mvn.cmd.fortify.extra.properties} ${mvn.plugin.fortify}:${mvn.plugin.fortify.version}:translate" />
+    <property name="sourceanalyzer.fortify.scan" value="${mvn.cmd.fortify.extra.properties} ${mvn.plugin.fortify}:${mvn.plugin.fortify.version}:scan"/>
+    <property name="sourceanalyzer.fortify.clean" value="${mvn.cmd.fortify.extra.properties} ${mvn.plugin.fortify}:${mvn.plugin.fortify.version}:clean" />
 
 
 <!--..............................................................................................................
