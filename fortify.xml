@@ -65,7 +65,7 @@
     <property name="mvn.cmd.fortify.scan" value="initialize sca:scan" /> -->
 
     <!-- Maven command with extra properties needed for running the maven command (Usually used in our build pipelines) -->
-    <property name="mvn.cmd.fortify.extra.properties" value="mvn -Dmaven.wagon.http.ssl.insecure=true -Dmaven.wagon.http.ssl.ignore.validity.dates=true -Dmaven.wagon.http.ssl.allowall=true -Ddockerfile.skip=true -DskipITs=true -s ${mvn.project.settings}" />
+    <property name="mvn.cmd.fortify.extra.properties" value="mvn -Dmaven.wagon.http.ssl.insecure=true -Dmaven.wagon.http.ssl.ignore.validity.dates=true -Dmaven.wagon.http.ssl.allowall=true -Ddockerfile.skip=true -DskipITs=true -s ${mvn.project.settings} -Dfortify.sca.Xmx=3G" />
 
     <!-- Values for the fortify maven plugin -->
     <property name="mvn.plugin.fortify" value="com.hpe.security.fortify.maven.plugin:sca-maven-plugin" />
